@@ -1,35 +1,19 @@
-const express = require("express");
-const os = require("os");
+require("dotenv").config();
 
-const app = express();
-const PORT = 3000;
+const app = require("./app");
+const connectDB = require("./config/db");
 
-app.use(express.json());
+const PORT = process.env.PORT || 3000;
 
-// Function to get local IP
-function getLocalIP() {
-  const interfaces = os.networkInterfaces();
+async function start() {
+  await connectDB();
 
-  for (let iface in interfaces) {
-    for (let i of interfaces[iface]) {
-      if (i.family === "IPv4" && !i.internal) {
-        return i.address;
-      }
-    }
-  }
-  return "localhost";
+  app.listen(PORT, "0.0.0.0", () => {
+    console.log(`Server listening on port ${PORT}`);
+  });
 }
 
-// Route
-app.post("/data", (req, res) => {
-  console.log(req.body);
-  res.send("Data received");
-});
-
-// Start server
-app.listen(PORT, "0.0.0.0", () => {
-  const ip = getLocalIP();
-  console.log(`Server running on:`);
-  console.log(`→ http://localhost:${PORT}`);
-  console.log(`→ http://${ip}:${PORT}`);
+start().catch((error) => {
+  console.error("Failed to start server:", error);
+  process.exit(1);
 });
