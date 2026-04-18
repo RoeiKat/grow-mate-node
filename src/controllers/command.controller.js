@@ -2,11 +2,27 @@ const Device = require("../models/Device");
 const Command = require("../models/Command");
 const ApiError = require("../utils/ApiError");
 
+const ALLOWED_COMMAND_TYPES = [
+  "refresh_telemetry",
+  "water_plant",
+  "firmware_update",
+  "rotate_auth_secret"
+];
+
 async function createCommand(req, res) {
   const { deviceId, type, payload } = req.body;
 
   if (!deviceId || !type) {
     throw new ApiError(400, "deviceId and type are required");
+  }
+
+  const normalizedType = String(type).trim();
+
+  if (!ALLOWED_COMMAND_TYPES.includes(normalizedType)) {
+    throw new ApiError(
+      400,
+      `Invalid command type. Allowed types: ${ALLOWED_COMMAND_TYPES.join(", ")}`
+    );
   }
 
   const device = await Device.findOne({
@@ -22,7 +38,7 @@ async function createCommand(req, res) {
   const command = await Command.create({
     user: req.user._id,
     device: device._id,
-    type: type.trim(),
+    type: normalizedType,
     payload: payload || {}
   });
 

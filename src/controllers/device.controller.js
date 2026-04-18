@@ -199,6 +199,11 @@ async function getSingleDevice(req, res) {
 
   res.json({
     device,
+    telemetry: device.latestData || {},
+    meta: {
+      lastSeenAt: device.lastSeenAt || null,
+      pairingCodeActive: Boolean(device.pairingCodeActive)
+    },
     recentCommands: commands
   });
 }
