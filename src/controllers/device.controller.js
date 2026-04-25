@@ -36,6 +36,22 @@ function assertTargetVersionConfigured(targetAuthVersion) {
   return masterSecret;
 }
 
+async function resetDeviceState(device) {
+  device.user = null;
+  device.status = "unpaired";
+  device.name = "";
+  device.latestData = {};
+  device.pairingCodeActive = false;
+  device.lastSeenAt = new Date();
+
+  await device.save();
+
+  await Promise.all([
+    PairingCode.deleteMany({ device: device._id }),
+    Command.deleteMany({ device: device._id })
+  ]);
+}
+
 async function generateDeviceSecret(req, res) {
   const serialNumber = normalizeSerialNumber(req.params.serial);
   const targetAuthVersion = String(
@@ -239,15 +255,7 @@ async function unpairDevice(req, res) {
     throw new ApiError(404, "Device not found");
   }
 
-  device.user = null;
-  device.status = "unpaired";
-  device.name = "";
-  device.latestData = {};
-  device.pairingCodeActive = false;
-  await device.save();
-
-  await PairingCode.deleteMany({ device: device._id });
-  await Command.deleteMany({ device: device._id });
+  await resetDeviceState(device);
 
   res.json({
     message: "Device unpaired"
@@ -417,6 +425,7 @@ async function queueAuthRotationForAll(req, res) {
 }
 
 module.exports = {
+  resetDeviceState,
   generateDeviceSecret,
   requestPairingCode,
   confirmPairing,

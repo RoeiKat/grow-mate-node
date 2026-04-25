@@ -11,5 +11,6 @@ router.get("/heartbeat", requireDeviceAuth, asyncHandler(deviceClientController.
 router.post("/data", requireDeviceAuth, asyncHandler(deviceClientController.pushLatestData));
 router.get("/commands/pending", requireDeviceAuth, asyncHandler(deviceClientController.getPendingCommands));
 router.patch("/commands/:commandId/status", requireDeviceAuth, asyncHandler(deviceClientController.updateCommandStatus));
+router.post("/reset", requireDeviceAuth, asyncHandler(deviceClientController.resetSelf));
 
 module.exports = router;

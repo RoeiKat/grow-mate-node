@@ -1,5 +1,6 @@
 const Command = require("../models/Command");
 const ApiError = require("../utils/ApiError");
+const deviceController = require("./device.controller");
 
 async function heartbeat(req, res) {
   req.device.lastSeenAt = new Date();
@@ -119,9 +120,25 @@ async function updateCommandStatus(req, res) {
   });
 }
 
+async function resetSelf(req, res) {
+  await deviceController.resetDeviceState(req.device);
+
+  res.json({
+    ok: true,
+    message: "Device reset successfully",
+    device: {
+      isPaired: false,
+      status: req.device.status,
+      authVersion: req.device.authVersion,
+      firmwareVersion: req.device.firmwareVersion
+    }
+  });
+}
+
 module.exports = {
   heartbeat,
   pushLatestData,
   getPendingCommands,
-  updateCommandStatus
+  updateCommandStatus,
+  resetSelf
 };
