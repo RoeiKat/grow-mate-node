@@ -555,7 +555,7 @@ function renderFactorySecretPage(req, res) {
       <label>Auth Version</label>
       <input id="version" placeholder="v1" value="v1" required />
 
-      <button id="submitBtn">Generate Secret</button>
+<button id="submitBtn" type="submit">Generate Secret</button>
     </form>
 
     <div id="alert" class="alert"></div>
@@ -584,11 +584,20 @@ function renderFactorySecretPage(req, res) {
         const version = document.getElementById("version").value.trim();
 
         try {
-          const response = await fetch("./generate-secret/" + encodeURIComponent(serial) + "?version=" + encodeURIComponent(version), {
-            headers: {
-              "x-factory-api-key": factoryApiKey
-            }
-          });
+    const url =
+      "/api/devices/factory/generate-secret/" +
+      encodeURIComponent(serial) +
+      "?version=" +
+      encodeURIComponent(version);
+
+    const response = await fetch(url, {
+      method: "GET",
+      cache: "no-store",
+      headers: {
+        "x-factory-api-key": factoryApiKey,
+        Accept: "application/json",
+      },
+    });
 
           const data = await response.json();
 

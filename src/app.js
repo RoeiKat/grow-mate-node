@@ -18,18 +18,47 @@ const allowedOrigins = (process.env.CORS_ORIGINS || "")
   .map((origin) => origin.trim())
   .filter(Boolean);
 
-app.use(helmet());
+// IMPORTANT:
+// Disable CSP because your factory pages use inline <script>.
+// Without this, Helmet can block the form JS and no request is sent.
+app.use(
+  helmet({
+    contentSecurityPolicy: false,
+  }),
+);
+
+app.use((req, res, next) => {
+  if (
+    req.path.includes("/factory/secret-page") ||
+    req.path.includes("/factory/firmware-page")
+  ) {
+    res.set({
+      "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+      Pragma: "no-cache",
+      Expires: "0",
+      "Surrogate-Control": "no-store",
+    });
+  }
+
+  next();
+});
+
 app.use(
   cors({
     origin(origin, callback) {
-      if (!origin || allowedOrigins.length === 0 || allowedOrigins.includes(origin)) {
+      if (
+        !origin ||
+        allowedOrigins.length === 0 ||
+        allowedOrigins.includes(origin)
+      ) {
         return callback(null, true);
       }
       return callback(new Error("CORS blocked this origin"));
     },
-    credentials: true
-  })
+    credentials: true,
+  }),
 );
+
 app.use(express.json({ limit: "1mb" }));
 app.use(morgan("dev"));
 
@@ -39,9 +68,13 @@ app.use(
     windowMs: 15 * 60 * 1000,
     max: 500,
     standardHeaders: true,
-    legacyHeaders: false
-  })
+    legacyHeaders: false,
+  }),
 );
+
+app.get("/health", (req, res) => {
+  res.json({ ok: true, env: process.env.NODE_ENV || "development" });
+});
 
 app.get("/api/health", (req, res) => {
   res.json({ ok: true, env: process.env.NODE_ENV || "development" });
