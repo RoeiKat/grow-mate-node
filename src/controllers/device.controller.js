@@ -1,3 +1,5 @@
+const crypto = require("crypto");
+const fs = require("fs");
 const Device = require("../models/Device");
 const PairingCode = require("../models/PairingCode");
 const Command = require("../models/Command");
@@ -6,11 +8,14 @@ const { generatePairingCode } = require("../utils/pairingCode");
 const {
   normalizeSerialNumber,
   buildDerivedDeviceSecretForVersion,
-  getMasterSecretForVersion
+  getMasterSecretForVersion,
 } = require("../utils/deviceIdentity");
 
 function getBulkWindowMinutes(req) {
-  const raw = req.body?.onlySeenWithinMinutes ?? process.env.FACTORY_BULK_ONLINE_MINUTES ?? "1440";
+  const raw =
+    req.body?.onlySeenWithinMinutes ??
+    process.env.FACTORY_BULK_ONLINE_MINUTES ??
+    "1440";
   const value = Number(raw);
   return Number.isFinite(value) && value > 0 ? value : 1440;
 }
@@ -22,7 +27,7 @@ function buildBulkPairedFilter(req) {
   return {
     status: "paired",
     user: { $ne: null },
-    lastSeenAt: { $gte: since }
+    lastSeenAt: { $gte: since },
   };
 }
 
@@ -48,14 +53,14 @@ async function resetDeviceState(device) {
 
   await Promise.all([
     PairingCode.deleteMany({ device: device._id }),
-    Command.deleteMany({ device: device._id })
+    Command.deleteMany({ device: device._id }),
   ]);
 }
 
 async function generateDeviceSecret(req, res) {
   const serialNumber = normalizeSerialNumber(req.params.serial);
   const targetAuthVersion = String(
-    req.query.version || process.env.DEVICE_AUTH_CURRENT_VERSION || ""
+    req.query.version || process.env.DEVICE_AUTH_CURRENT_VERSION || "",
   ).trim();
 
   if (!serialNumber) {
@@ -64,12 +69,15 @@ async function generateDeviceSecret(req, res) {
 
   assertTargetVersionConfigured(targetAuthVersion);
 
-  const deviceSecret = buildDerivedDeviceSecretForVersion(serialNumber, targetAuthVersion);
+  const deviceSecret = buildDerivedDeviceSecretForVersion(
+    serialNumber,
+    targetAuthVersion,
+  );
 
   res.json({
     serialNumber,
     authVersion: targetAuthVersion,
-    deviceSecret
+    deviceSecret,
   });
 }
 
@@ -99,11 +107,11 @@ async function requestPairingCode(req, res) {
         isPaired: true,
         status: req.device.status,
         authVersion: req.device.authVersion,
-        firmwareVersion: req.device.firmwareVersion
+        firmwareVersion: req.device.firmwareVersion,
       },
       pairingCode: null,
       code: null,
-      expiresAt: null
+      expiresAt: null,
     });
   }
 
@@ -115,7 +123,7 @@ async function requestPairingCode(req, res) {
   const pairingCode = await PairingCode.create({
     code,
     device: req.device._id,
-    expiresAt
+    expiresAt,
   });
 
   req.device.status = "unpaired";
@@ -129,14 +137,14 @@ async function requestPairingCode(req, res) {
       isPaired: false,
       status: req.device.status,
       authVersion: req.device.authVersion,
-      firmwareVersion: req.device.firmwareVersion
+      firmwareVersion: req.device.firmwareVersion,
     },
     pairingCode: {
       code: pairingCode.code,
-      expiresAt: pairingCode.expiresAt
+      expiresAt: pairingCode.expiresAt,
     },
     code: pairingCode.code,
-    expiresAt: pairingCode.expiresAt
+    expiresAt: pairingCode.expiresAt,
   });
 }
 
@@ -150,7 +158,7 @@ async function confirmPairing(req, res) {
   const pairingCode = await PairingCode.findOne({
     code: code.trim(),
     usedAt: null,
-    expiresAt: { $gt: new Date() }
+    expiresAt: { $gt: new Date() },
   }).populate("device");
 
   if (!pairingCode) {
@@ -184,25 +192,27 @@ async function confirmPairing(req, res) {
     PairingCode.deleteMany({
       device: device._id,
       usedAt: null,
-      _id: { $ne: pairingCode._id }
-    })
+      _id: { $ne: pairingCode._id },
+    }),
   ]);
 
   res.json({
     message: "Device paired successfully",
-    device
+    device,
   });
 }
 
 async function getMyDevices(req, res) {
-  const devices = await Device.find({ user: req.user._id }).sort({ createdAt: -1 });
+  const devices = await Device.find({ user: req.user._id }).sort({
+    createdAt: -1,
+  });
   res.json({ devices });
 }
 
 async function getSingleDevice(req, res) {
   const device = await Device.findOne({
     _id: req.params.deviceId,
-    user: req.user._id
+    user: req.user._id,
   });
 
   if (!device) {
@@ -218,9 +228,9 @@ async function getSingleDevice(req, res) {
     telemetry: device.latestData || {},
     meta: {
       lastSeenAt: device.lastSeenAt || null,
-      pairingCodeActive: Boolean(device.pairingCodeActive)
+      pairingCodeActive: Boolean(device.pairingCodeActive),
     },
-    recentCommands: commands
+    recentCommands: commands,
   });
 }
 
@@ -229,7 +239,7 @@ async function renameDevice(req, res) {
 
   const device = await Device.findOne({
     _id: req.params.deviceId,
-    user: req.user._id
+    user: req.user._id,
   });
 
   if (!device) {
@@ -241,14 +251,14 @@ async function renameDevice(req, res) {
 
   res.json({
     message: "Device updated",
-    device
+    device,
   });
 }
 
 async function unpairDevice(req, res) {
   const device = await Device.findOne({
     _id: req.params.deviceId,
-    user: req.user._id
+    user: req.user._id,
   });
 
   if (!device) {
@@ -258,7 +268,7 @@ async function unpairDevice(req, res) {
   await resetDeviceState(device);
 
   res.json({
-    message: "Device unpaired"
+    message: "Device unpaired",
   });
 }
 
@@ -276,7 +286,10 @@ async function queueFirmwareUpdateForDevice(req, res) {
   }
 
   if (!device.user) {
-    throw new ApiError(400, "Device must be paired before queueing firmware updates");
+    throw new ApiError(
+      400,
+      "Device must be paired before queueing firmware updates",
+    );
   }
 
   if (device.status !== "paired") {
@@ -291,13 +304,13 @@ async function queueFirmwareUpdateForDevice(req, res) {
       version: String(version).trim(),
       url: String(url).trim(),
       sha256: sha256 ? String(sha256).trim() : "",
-      force: Boolean(force)
-    }
+      force: Boolean(force),
+    },
   });
 
   res.status(201).json({
     message: "Firmware update command queued",
-    command
+    command,
   });
 }
 
@@ -313,7 +326,7 @@ async function queueFirmwareUpdateForAll(req, res) {
   if (devices.length === 0) {
     return res.json({
       message: "No eligible devices found",
-      queuedCount: 0
+      queuedCount: 0,
     });
   }
 
@@ -325,8 +338,8 @@ async function queueFirmwareUpdateForAll(req, res) {
       version: String(version).trim(),
       url: String(url).trim(),
       sha256: sha256 ? String(sha256).trim() : "",
-      force: Boolean(force)
-    }
+      force: Boolean(force),
+    },
   }));
 
   const commands = await Command.insertMany(docs);
@@ -334,7 +347,7 @@ async function queueFirmwareUpdateForAll(req, res) {
   res.status(201).json({
     message: "Firmware update commands queued",
     queuedCount: commands.length,
-    deviceIds: devices.map((device) => device._id)
+    deviceIds: devices.map((device) => device._id),
   });
 }
 
@@ -354,7 +367,10 @@ async function queueAuthRotationForDevice(req, res) {
   }
 
   if (!device.user) {
-    throw new ApiError(400, "Device must be paired before queueing auth rotation");
+    throw new ApiError(
+      400,
+      "Device must be paired before queueing auth rotation",
+    );
   }
 
   if (device.status !== "paired") {
@@ -363,7 +379,7 @@ async function queueAuthRotationForDevice(req, res) {
 
   const targetAuthSecret = buildDerivedDeviceSecretForVersion(
     device.serialNumber,
-    String(targetAuthVersion).trim()
+    String(targetAuthVersion).trim(),
   );
 
   const command = await Command.create({
@@ -372,13 +388,13 @@ async function queueAuthRotationForDevice(req, res) {
     type: "rotate_auth_secret",
     payload: {
       targetAuthVersion: String(targetAuthVersion).trim(),
-      targetAuthSecret
-    }
+      targetAuthSecret,
+    },
   });
 
   res.status(201).json({
     message: "Auth rotation command queued",
-    command
+    command,
   });
 }
 
@@ -396,7 +412,7 @@ async function queueAuthRotationForAll(req, res) {
   if (devices.length === 0) {
     return res.json({
       message: "No eligible devices found",
-      queuedCount: 0
+      queuedCount: 0,
     });
   }
 
@@ -410,9 +426,9 @@ async function queueAuthRotationForAll(req, res) {
       targetAuthVersion: normalizedVersion,
       targetAuthSecret: buildDerivedDeviceSecretForVersion(
         device.serialNumber,
-        normalizedVersion
-      )
-    }
+        normalizedVersion,
+      ),
+    },
   }));
 
   const commands = await Command.insertMany(docs);
@@ -420,8 +436,308 @@ async function queueAuthRotationForAll(req, res) {
   res.status(201).json({
     message: "Auth rotation commands queued",
     queuedCount: commands.length,
-    deviceIds: devices.map((device) => device._id)
+    deviceIds: devices.map((device) => device._id),
   });
+}
+
+function factoryPageLayout(title, body) {
+  return `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>${title}</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: Arial, sans-serif;
+      background: #f6f7f8;
+      color: #1f2937;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+    .card {
+      width: 100%;
+      max-width: 520px;
+      background: white;
+      border: 1px solid #e5e7eb;
+      border-radius: 18px;
+      padding: 28px;
+      box-shadow: 0 12px 35px rgba(0,0,0,0.06);
+    }
+    h1 { margin: 0 0 8px; font-size: 24px; }
+    p { margin: 0 0 22px; color: #6b7280; }
+    label {
+      display: block;
+      margin: 14px 0 6px;
+      font-size: 14px;
+      font-weight: 700;
+    }
+    input {
+      width: 100%;
+      padding: 12px 14px;
+      border: 1px solid #d1d5db;
+      border-radius: 12px;
+      font-size: 15px;
+      outline: none;
+    }
+    input:focus { border-color: #3F826D; }
+    button {
+      width: 100%;
+      margin-top: 20px;
+      padding: 13px 16px;
+      border: none;
+      border-radius: 12px;
+      background: #3F826D;
+      color: white;
+      font-weight: 800;
+      font-size: 15px;
+      cursor: pointer;
+    }
+    button:disabled { opacity: 0.6; cursor: wait; }
+    .alert {
+      display: none;
+      margin-top: 18px;
+      padding: 14px;
+      border-radius: 12px;
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-size: 14px;
+    }
+    .success {
+      display: block;
+      background: #ecfdf5;
+      border: 1px solid #86efac;
+      color: #166534;
+    }
+    .error {
+      display: block;
+      background: #fef2f2;
+      border: 1px solid #fca5a5;
+      color: #991b1b;
+    }
+    .links {
+      display: flex;
+      gap: 12px;
+      margin-top: 18px;
+      font-size: 14px;
+    }
+    a { color: #3F826D; font-weight: 700; text-decoration: none; }
+  </style>
+</head>
+<body>
+  <main class="card">
+    ${body}
+  </main>
+</body>
+</html>`;
+}
+
+function renderFactorySecretPage(req, res) {
+  res.type("html").send(
+    factoryPageLayout(
+      "Factory Device Secret",
+      `
+    <h1>Generate Device Secret</h1>
+    <p>Enter the factory API key, device serial, and auth version.</p>
+
+    <form id="secretForm">
+      <label>Factory API Key</label>
+      <input id="factoryApiKey" type="password" required />
+
+      <label>Device Serial</label>
+      <input id="serial" placeholder="00000AABBCCDDEEFF" required />
+
+      <label>Auth Version</label>
+      <input id="version" placeholder="v1" value="v1" required />
+
+      <button id="submitBtn">Generate Secret</button>
+    </form>
+
+    <div id="alert" class="alert"></div>
+
+    <div class="links">
+      <a href="./firmware-page">Firmware update page</a>
+    </div>
+
+    <script>
+      const form = document.getElementById("secretForm");
+      const alertBox = document.getElementById("alert");
+      const submitBtn = document.getElementById("submitBtn");
+
+      function showAlert(type, text) {
+        alertBox.className = "alert " + type;
+        alertBox.textContent = text;
+      }
+
+      form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        alertBox.className = "alert";
+        submitBtn.disabled = true;
+
+        const factoryApiKey = document.getElementById("factoryApiKey").value.trim();
+        const serial = document.getElementById("serial").value.trim();
+        const version = document.getElementById("version").value.trim();
+
+        try {
+          const response = await fetch("./generate-secret/" + encodeURIComponent(serial) + "?version=" + encodeURIComponent(version), {
+            headers: {
+              "x-factory-api-key": factoryApiKey
+            }
+          });
+
+          const data = await response.json();
+
+          if (!response.ok) {
+            throw new Error(data.message || "Failed to generate secret");
+          }
+
+          showAlert("success",
+            "Serial: " + data.serialNumber +
+            "\\nAuth Version: " + data.authVersion +
+            "\\nDevice Secret:\\n" + data.deviceSecret
+          );
+        } catch (error) {
+          showAlert("error", error.message);
+        } finally {
+          submitBtn.disabled = false;
+        }
+      });
+    </script>
+  `,
+    ),
+  );
+}
+
+function renderFactoryFirmwarePage(req, res) {
+  res.type("html").send(
+    factoryPageLayout(
+      "Factory Firmware Update",
+      `
+    <h1>Upload Firmware Update</h1>
+    <p>Upload the latest build and queue an update for all eligible paired devices.</p>
+
+    <form id="firmwareForm">
+      <label>Factory API Key</label>
+      <input id="factoryApiKey" type="password" required />
+
+      <label>Firmware Version</label>
+      <input id="version" placeholder="1.0.1" required />
+
+      <label>Only devices seen within minutes</label>
+      <input id="onlySeenWithinMinutes" type="number" min="1" value="1440" />
+
+      <label>Firmware File</label>
+      <input id="firmware" type="file" required />
+
+      <label>
+        <input id="force" type="checkbox" style="width:auto; margin-right:8px;" />
+        Force update
+      </label>
+
+      <button id="submitBtn">Upload & Queue Update</button>
+    </form>
+
+    <div id="alert" class="alert"></div>
+
+    <div class="links">
+      <a href="./secret-page">Device secret page</a>
+    </div>
+
+    <script>
+      const form = document.getElementById("firmwareForm");
+      const alertBox = document.getElementById("alert");
+      const submitBtn = document.getElementById("submitBtn");
+
+      function showAlert(type, text) {
+        alertBox.className = "alert " + type;
+        alertBox.textContent = text;
+      }
+
+      form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        alertBox.className = "alert";
+        submitBtn.disabled = true;
+
+        const factoryApiKey = document.getElementById("factoryApiKey").value.trim();
+        const formData = new FormData();
+
+        formData.append("version", document.getElementById("version").value.trim());
+        formData.append("onlySeenWithinMinutes", document.getElementById("onlySeenWithinMinutes").value.trim());
+        formData.append("force", document.getElementById("force").checked ? "true" : "false");
+        formData.append("firmware", document.getElementById("firmware").files[0]);
+
+        try {
+          const response = await fetch("./firmware-upload-all", {
+            method: "POST",
+            headers: {
+              "x-factory-api-key": factoryApiKey
+            },
+            body: formData
+          });
+
+          const data = await response.json();
+
+          if (!response.ok) {
+            throw new Error(data.message || "Firmware upload failed");
+          }
+
+          showAlert("success",
+            data.message +
+            "\\nQueued devices: " + data.queuedCount +
+            "\\nVersion: " + data.version +
+            "\\nSHA256: " + data.sha256 +
+            "\\nURL: " + data.url
+          );
+        } catch (error) {
+          showAlert("error", error.message);
+        } finally {
+          submitBtn.disabled = false;
+        }
+      });
+    </script>
+  `,
+    ),
+  );
+}
+
+async function queueUploadedFirmwareUpdateForAll(req, res) {
+  const { version, force = false } = req.body || {};
+
+  if (!version) {
+    throw new ApiError(400, "version is required");
+  }
+
+  if (!req.file) {
+    throw new ApiError(400, "firmware file is required");
+  }
+
+  const fileBuffer = fs.readFileSync(req.file.path);
+  const sha256 = crypto.createHash("sha256").update(fileBuffer).digest("hex");
+
+  const baseUrl =
+    process.env.PUBLIC_BASE_URL || `${req.protocol}://${req.get("host")}`;
+
+  req.body.url = `${baseUrl}/api/devices/factory/firmware-files/${req.file.filename}`;
+  req.body.sha256 = sha256;
+  req.body.force = String(force) === "true" || force === true;
+
+  const originalJson = res.json.bind(res);
+
+  res.json = (payload) => {
+    return originalJson({
+      ...payload,
+      version: String(version).trim(),
+      url: req.body.url,
+      sha256,
+    });
+  };
+
+  return queueFirmwareUpdateForAll(req, res);
 }
 
 module.exports = {
@@ -436,5 +752,8 @@ module.exports = {
   queueFirmwareUpdateForDevice,
   queueFirmwareUpdateForAll,
   queueAuthRotationForDevice,
-  queueAuthRotationForAll
+  queueAuthRotationForAll,
+  renderFactorySecretPage,
+  renderFactoryFirmwarePage,
+  queueUploadedFirmwareUpdateForAll,
 };
